@@ -1,0 +1,22 @@
+# compiled output
+/dist
+/node_modules
+/coverage
+*.tsbuildinfo
+
+# env
+.env
+*.db
+*.db-journal
+
+# logs
+npm-debug.log*
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea
+.vscode
