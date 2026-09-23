@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Perfil {
+  CLIENTE
+  ATENDENTE
+  COZINHA
+  GERENTE
+  ADMIN
+}
+
+enum CanalPedido {
+  APP
+  TOTEM
+  BALCAO
+  PICKUP
+  WEB
+}
+
+enum StatusPedido {
+  AGUARDANDO_PAGAMENTO
+  PAGAMENTO_RECUSADO
+  RECEBIDO
+  EM_PREPARO
+  PRONTO
+  ENTREGUE
+  CANCELADO
+}
+
+enum StatusPagamento {
+  PENDENTE
+  APROVADO
+  RECUSADO
+}
+
+enum TipoMovimentacao {
+  ENTRADA
+  SAIDA
+  ESTORNO
+}
+
+enum TipoFidelidade {
+  CREDITO
+  DEBITO
+  RESGATE
+}
+
+model Usuario {
+  id                          Int       @id @default(autoincrement())
+  nome                        String
+  email                       String    @unique
+  telefone                    String?
+  senhaHash                   String
+  perfil                      Perfil
+  consentimentoFidelidade     Boolean   @default(false)
+  consentimentoFidelidadeEm   DateTime?
+  ativo                       Boolean   @default(true)
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+  pedidos                     Pedido[]  @relation("ClientePedidos")
+  logs                        LogAuditoria[]
+  fidelidade                  ContaFidelidade?
+  consentimentos              Consentimento[]
+}
+
+model Unidade {
+  id        Int               @id @default(autoincrement())
+  nome      String
+  cidade    String
+  estado    String
+  endereco  String
+  ativa     Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  cardapios CardapioUnidade[]
+  estoques  Estoque[]
+  pedidos   Pedido[]
+}
+
+model Produto {
+  id        Int               @id @default(autoincrement())
+  nome      String
+  descricao String
+  preco     Float
+  categoria String
+  ativo     Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  cardapios CardapioUnidade[]
+  estoques  Estoque[]
+  itens     ItemPedido[]
+}
+
+model CardapioUnidade {
+  id         Int     @id @default(autoincrement())
+  unidadeId  Int
+  produtoId  Int
+  disponivel Boolean @default(true)
+  unidade    Unidade @relation(fields: [unidadeId], references: [id])
+  produto    Produto @relation(fields: [produtoId], references: [id])
+
+  @@unique([unidadeId, produtoId])
+}
+
+model Estoque {
+  id             Int                   @id @default(autoincrement())
+  unidadeId      Int
+  produtoId      Int
+  quantidade     Int                   @default(0)
+  unidade        Unidade               @relation(fields: [unidadeId], references: [id])
+  produto        Produto               @relation(fields: [produtoId], references: [id])
+  movimentacoes  MovimentacaoEstoque[]
+
+  @@unique([unidadeId, produtoId])
+}
+
+model MovimentacaoEstoque {
+  id         Int               @id @default(autoincrement())
+  estoqueId  Int
+  tipo       TipoMovimentacao
+  quantidade Int
+  motivo     String
+  usuarioId  Int?
+  createdAt  DateTime          @default(now())
+  estoque    Estoque           @relation(fields: [estoqueId], references: [id])
+}
+
+model Pedido {
+  id                 Int           @id @default(autoincrement())
+  clienteId          Int?
+  unidadeId          Int
+  canalPedido        CanalPedido
+  status             StatusPedido  @default(AGUARDANDO_PAGAMENTO)
+  total              Float
+  desconto           Float       @default(0)
+  codigoPromocional  String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  cliente            Usuario?      @relation("ClientePedidos", fields: [clienteId], references: [id])
+  unidade            Unidade       @relation(fields: [unidadeId], references: [id])
+  itens              ItemPedido[]
+  pagamento          Pagamento?
+}
+
+model ItemPedido {
+  id            Int     @id @default(autoincrement())
+  pedidoId      Int
+  produtoId     Int
+  quantidade    Int
+  precoUnitario Float
+  pedido        Pedido  @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produto       Produto @relation(fields: [produtoId], references: [id])
+}
+
+model Pagamento {
+  id             Int              @id @default(autoincrement())
+  pedidoId       Int              @unique
+  status         StatusPagamento  @default(PENDENTE)
+  provedor       String           @default("MOCK")
+  idempotencyKey String?          @unique
+  payloadEnvio   Json
+  payloadRetorno Json
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  pedido         Pedido           @relation(fields: [pedidoId], references: [id])
+}
+
+model ContaFidelidade {
+  id         Int                   @id @default(autoincrement())
+  usuarioId  Int                   @unique
+  pontos     Int                   @default(0)
+  usuario    Usuario               @relation(fields: [usuarioId], references: [id])
+  movimentos MovimentoFidelidade[]
+}
+
+model MovimentoFidelidade {
+  id        Int            @id @default(autoincrement())
+  contaId   Int
+  pontos    Int
+  tipo      TipoFidelidade
+  descricao String
+  createdAt DateTime       @default(now())
+  conta     ContaFidelidade @relation(fields: [contaId], references: [id])
+}
+
+model Promocao {
+  id          Int      @id @default(autoincrement())
+  codigo      String   @unique
+  descricao   String
+  percentual  Int
+  ativa       Boolean  @default(true)
+}
+
+model Consentimento {
+  id          Int      @id @default(autoincrement())
+  usuarioId   Int
+  finalidade  String
+  baseLegal   String
+  aceito      Boolean
+  createdAt   DateTime @default(now())
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+}
+
+model LogAuditoria {
+  id        Int      @id @default(autoincrement())
+  usuarioId Int?
+  acao      String
+  recurso   String
+  recursoId String?
+  detalhes  Json?
+  ip        String?
+  createdAt DateTime @default(now())
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id])
+}
